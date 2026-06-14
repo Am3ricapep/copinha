@@ -71,7 +71,7 @@ export async function authRoutes(app: FastifyInstance) {
           id:            user.id,
           nomeCompleto:  user.nomeCompleto,
           email:         user.email,
-          saldo:         Number(user.saldo),
+          saldo:         user.saldo,
           role:          user.role,
           isInfluencer:  user.isInfluencer,
           affiliateCode: user.affiliateCode,
@@ -119,8 +119,8 @@ export async function authRoutes(app: FastifyInstance) {
           id:           user.id,
           nomeCompleto: user.nomeCompleto,
           email:        user.email,
-          saldo:        Number(user.saldo),
-          saldoDemo:    Number(user.saldoDemo),
+          saldo:        user.saldo,
+          saldoDemo:    user.saldoDemo,
           role:         user.role,
           isInfluencer: user.isInfluencer,
           affiliateCode: user.affiliateCode,
@@ -193,7 +193,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(404).send({ success: false, message: 'Usuário não encontrado.' })
     }
 
-    return reply.send({ success: true, user: { ...user, saldo: Number(user.saldo), saldoDemo: Number(user.saldoDemo), saldoRevshare: Number(user.saldoRevshare) } })
+    return reply.send({ success: true, user })
   })
 
   // ── Update status (heartbeat — seta online + last_seen) ────────────────────

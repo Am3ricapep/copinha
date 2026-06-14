@@ -78,8 +78,8 @@ export async function spinRoutes(app: FastifyInstance) {
 
     return reply.send({
       success: true,
-      saldo:        Number(isSpecial ? user.saldoDemo : user.saldo),
-      saldoRevshare: Number(user.saldoRevshare),
+      saldo:        isSpecial ? user.saldoDemo : user.saldo,
+      saldoRevshare: user.saldoRevshare,
     })
   })
 

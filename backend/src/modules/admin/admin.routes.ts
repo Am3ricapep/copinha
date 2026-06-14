@@ -125,7 +125,7 @@ export async function adminRoutes(app: FastifyInstance) {
       prisma.user.count({ where }),
     ])
 
-    return reply.send({ success: true, users, total, page, pages: Math.ceil(total / limit) })
+    return reply.send({ success: true, data: users, users, total, page, pages: Math.ceil(total / limit) })
   })
 
   // ── Detalhes do usuário ───────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     })
     if (!user) return reply.status(404).send({ success: false })
-    return reply.send({ success: true, user })
+    return reply.send({ success: true, data: user, user })
   })
 
   // ── Ações de promoção / gestão de usuários ────────────────────────────────────
@@ -440,7 +440,7 @@ export async function adminRoutes(app: FastifyInstance) {
         take: 20,
       }),
     ])
-    return reply.send({ success: true, active, history })
+    return reply.send({ success: true, data: active, active, history })
   })
 
   app.post('/campaigns', async (request, reply) => {
@@ -502,7 +502,21 @@ export async function adminRoutes(app: FastifyInstance) {
       }),
       prisma.withdrawal.count({ where }),
     ])
-    return reply.send({ success: true, withdrawals, total, pages: Math.ceil(total / limit) })
+    const mappedWithdrawals = withdrawals.map(w => ({
+      id:         w.id,
+      userId:     w.userId,
+      userName:   w.user.nomeCompleto,
+      userEmail:  w.user.email,
+      amount:     w.amount,
+      pixKeyType: w.pixKeyType,
+      pixKey:     w.pixKey,
+      nome:       w.nome,
+      cpf:        w.cpf ?? w.user.cpf,
+      status:     w.status,
+      walletType: w.walletType,
+      createdAt:  w.createdAt,
+    }))
+    return reply.send({ success: true, data: mappedWithdrawals, withdrawals: mappedWithdrawals, total, pages: Math.ceil(total / limit) })
   })
 
   app.patch('/withdrawals/:id', async (request, reply) => {
@@ -661,13 +675,13 @@ export async function adminRoutes(app: FastifyInstance) {
       }),
       prisma.user.count({ where }),
     ])
-    return reply.send({ success: true, managers, total, pages: Math.ceil(total / limit) })
+    return reply.send({ success: true, data: managers, managers, total, pages: Math.ceil(total / limit) })
   })
 
   // ── Buscar usuários (para promoção) ───────────────────────────────────────────
   app.get('/search-users', async (request, reply) => {
     const { q } = request.query as { q?: string }
-    if (!q || q.length < 2) return reply.send({ users: [] })
+    if (!q || q.length < 2) return reply.send({ users: [], data: [] })
 
     const users = await prisma.user.findMany({
       where: {
@@ -683,7 +697,7 @@ export async function adminRoutes(app: FastifyInstance) {
         role: true, isInfluencer: true, managerId: true, comissao: true,
       },
     })
-    return reply.send({ users })
+    return reply.send({ users, data: users })
   })
 
   // ── Depósitos ─────────────────────────────────────────────────────────────────
@@ -719,7 +733,16 @@ export async function adminRoutes(app: FastifyInstance) {
       }),
       prisma.deposit.count({ where }),
     ])
-    return reply.send({ success: true, deposits, total, pages: Math.ceil(total / limit) })
+    const mappedDeposits = deposits.map(d => ({
+      id:         d.id,
+      userId:     d.userId,
+      userEmail:  d.user.email,
+      amount:     d.amount,
+      status:     d.status,
+      externalId: d.externalId,
+      createdAt:  d.createdAt,
+    }))
+    return reply.send({ success: true, data: mappedDeposits, deposits: mappedDeposits, total, pages: Math.ceil(total / limit) })
   })
 
   // ── Atualizar perfil de usuário ───────────────────────────────────────────────
@@ -923,7 +946,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }),
       prisma.user.count({ where }),
     ])
-    return reply.send({ success: true, affiliates, total, pages: Math.ceil(total / limit) })
+    return reply.send({ success: true, data: affiliates, affiliates, total, pages: Math.ceil(total / limit) })
   })
 
   // ── Detalhes de afiliado (usuários convidados) ────────────────────────────────
@@ -931,8 +954,14 @@ export async function adminRoutes(app: FastifyInstance) {
     const { id }      = request.params as { id: string }
     const affiliateId = Number(id)
 
-    const user = await prisma.user.findUnique({ where: { id: affiliateId }, select: { id: true, nomeCompleto: true, managerId: true } })
+    const user = await prisma.user.findUnique({
+      where: { id: affiliateId },
+      select: { id: true, nomeCompleto: true, email: true, managerId: true, comissao: true, saldoRevshare: true },
+    })
     if (!user) return reply.status(404).send({ success: false })
+
+    // Busca commissionType do usuário
+    const userFull = await prisma.user.findUnique({ where: { id: affiliateId }, select: { commissionType: true } })
 
     // onlyFirstDeposit via manager_recurring
     let onlyFirstDeposit = false
@@ -957,11 +986,29 @@ export async function adminRoutes(app: FastifyInstance) {
       return acc + (onlyFirstDeposit ? (r.deposits.length > 0 ? Number(r.deposits[0].amount) : 0) : total)
     }, 0)
 
-    return reply.send({ success: true, affiliateId, totalConvidados, totalDepositantes, totalTrazido, onlyFirstDeposit, referrals: referrals.map((r: typeof referrals[0]) => ({
-      ...r,
-      totalDeposits: r.deposits.reduce((s: number, d: { amount: any }) => s + Number(d.amount), 0),
-      deposits: undefined,
-    })) })
+    const referidos = referrals.map((r: typeof referrals[0]) => ({
+      id:              r.id,
+      nomeCompleto:    r.nomeCompleto,
+      email:           r.email,
+      totalDepositos:  r.deposits.reduce((s: number, d: { amount: any }) => s + Number(d.amount), 0),
+      primeiroDeposito: r.deposits.length > 0 ? Number(r.deposits[0].amount) : null,
+    }))
+
+    const data = {
+      id:                affiliateId,
+      nomeCompleto:      user.nomeCompleto,
+      email:             user.email,
+      comissao:          user.comissao,
+      commissionType:    userFull?.commissionType ?? 'rev',
+      saldoRevshare:     user.saldoRevshare,
+      totalConvidados,
+      totalDepositantes,
+      totalTrazido,
+      onlyFirstDeposit,
+      referidos,
+    }
+
+    return reply.send({ success: true, data })
   })
 
   // ── Histórico de comissões ────────────────────────────────────────────────────
@@ -1008,7 +1055,16 @@ export async function adminRoutes(app: FastifyInstance) {
       prisma.affiliateLog.aggregate({ where, _sum: { amount: true } }),
     ])
 
-    return reply.send({ success: true, logs, total, pages: Math.ceil(total / limit), totalPago: totals._sum.amount ?? 0 })
+    const mappedLogs = logs.map(l => ({
+      id:             l.id,
+      influencerId:   l.referrerId,
+      influencerName: l.referrer?.nomeCompleto ?? null,
+      referidoNome:   l.referred?.nomeCompleto ?? null,
+      amount:         l.amount,
+      type:           l.type,
+      createdAt:      l.createdAt,
+    }))
+    return reply.send({ success: true, data: mappedLogs, logs: mappedLogs, total, pages: Math.ceil(total / limit), totalPago: Number(totals._sum.amount ?? 0) })
   })
 
   // ── Rollover campaigns ────────────────────────────────────────────────────────
@@ -1037,7 +1093,18 @@ export async function adminRoutes(app: FastifyInstance) {
     const statsMap: Record<string, number> = {}
     for (const s of stats) statsMap[s.status] = s._count.id
 
-    return reply.send({ success: true, campaigns, stats: statsMap })
+    const mapped = campaigns.map(c => ({
+      id:             c.id,
+      userId:         c.userId,
+      userEmail:      c.user.email,
+      depositAmount:  c.depositAmount,
+      requiredAmount: c.rolloverRequired,
+      currentAmount:  0,
+      status:         c.status,
+      createdAt:      c.createdAt,
+    }))
+
+    return reply.send({ success: true, data: mapped, campaigns: mapped, stats: statsMap })
   })
 
   // ── Webhook logs ──────────────────────────────────────────────────────────────
@@ -1069,7 +1136,15 @@ export async function adminRoutes(app: FastifyInstance) {
       }),
     ])
 
-    return reply.send({ success: true, items, total, pages: Math.ceil(total / limit), stats })
+    const mapped = items.map(i => ({
+      id:         i.id,
+      event:      i.event,
+      externalId: i.externalId,
+      status:     i.processed ? 'processed' : (i.error ? 'failed' : 'pending'),
+      error:      i.error,
+      createdAt:  i.receivedAt,
+    }))
+    return reply.send({ success: true, data: mapped, items: mapped, total, pages: Math.ceil(total / limit), stats })
   })
 
   app.post('/webhook-logs/:id/reprocess', async (request, reply) => {
@@ -1114,7 +1189,18 @@ export async function adminRoutes(app: FastifyInstance) {
       prisma.gameHistory.count({ where }),
     ])
 
-    return reply.send({ success: true, items, total, page, pages: Math.ceil(total / limit) })
+    const mappedItems = items.map(i => ({
+      id:          i.id,
+      userId:      i.userId,
+      userEmail:   i.user.email,
+      machineName: null,
+      machineId:   null,
+      bet:         i.betAmount,
+      win:         i.winAmount,
+      type:        i.result,
+      createdAt:   i.createdAt,
+    }))
+    return reply.send({ success: true, data: mappedItems, items: mappedItems, total, page, pages: Math.ceil(total / limit) })
   })
 
   // ── Verify withdraw token ─────────────────────────────────────────────────────
