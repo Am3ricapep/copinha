@@ -440,13 +440,23 @@ export async function adminRoutes(app: FastifyInstance) {
         take: 20,
       }),
     ])
-    return reply.send({ success: true, data: active, active, history })
+    const mapCampaign = (c: any) => ({
+      id:               c.id,
+      influencerId:     c.influencerId,
+      influencerName:   c.influencer?.nomeCompleto ?? null,
+      targetGain:       Number(c.targetGain ?? 0),
+      status:           c.status,
+      participantsCount: c.participants?.length ?? c._count?.participants ?? 0,
+      createdAt:        c.createdAt,
+    })
+    const allCampaigns = [...active.map(mapCampaign), ...history.map(mapCampaign)]
+    return reply.send({ success: true, data: allCampaigns, active: active.map(mapCampaign), history: history.map(mapCampaign) })
   })
 
   app.post('/campaigns', async (request, reply) => {
     const schema = z.object({
       influencerId: z.number(),
-      maxVagas:     z.number().min(1),
+      maxVagas:     z.number().min(1).default(100),
       targetGain:   z.number().positive(),
     })
     const body = schema.safeParse(request.body)
@@ -669,7 +679,7 @@ export async function adminRoutes(app: FastifyInstance) {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, nomeCompleto: true, email: true, saldo: true,
-          managerPool: true, managerRecurring: true, createdAt: true,
+          saldoRevshare: true, managerPool: true, managerRecurring: true, createdAt: true,
           _count: { select: { influencers: true } },
         },
       }),
@@ -773,26 +783,40 @@ export async function adminRoutes(app: FastifyInstance) {
   // ── Gateway config ────────────────────────────────────────────────────────────
   app.get('/gateway', async (_request, reply) => {
     const cfg = await prisma.gatewayConfig.findFirst({ where: { gatewayName: 'simplify' } })
-    return reply.send({ success: true, config: cfg ?? null })
+    const data = cfg ? {
+      clientId:       cfg.clientId,
+      clientSecret:   cfg.clientSecret,
+      splitPercent:   Number(cfg.splitPercentage),
+      splitPercentage: Number(cfg.splitPercentage),
+      splitUsername:  cfg.splitUsername,
+      isActive:       cfg.isActive,
+    } : null
+    return reply.send({ success: true, data, config: data })
   })
 
   app.put('/gateway', async (request, reply) => {
     const schema = z.object({
-      clientId:       z.string().optional(),
-      clientSecret:   z.string().optional(),
-      splitUsername:  z.string().nullable().optional(),
+      clientId:        z.string().optional(),
+      clientSecret:    z.string().optional(),
+      splitUsername:   z.string().nullable().optional(),
       splitPercentage: z.number().min(0).max(90).optional(),
-      isActive:       z.boolean().optional(),
+      splitPercent:    z.number().min(0).max(90).optional(),
+      isActive:        z.boolean().optional(),
     })
     const body = schema.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ success: false, message: 'Dados inválidos.' })
 
+    const { splitPercent, splitPercentage, ...rest } = body.data
+    const saveData: any = { ...rest }
+    if (splitPercentage !== undefined) saveData.splitPercentage = splitPercentage
+    else if (splitPercent !== undefined) saveData.splitPercentage = splitPercent
+
     const existing = await prisma.gatewayConfig.findFirst({ where: { gatewayName: 'simplify' } })
     if (existing) {
-      await prisma.gatewayConfig.update({ where: { id: existing.id }, data: body.data })
+      await prisma.gatewayConfig.update({ where: { id: existing.id }, data: saveData })
     } else {
       await prisma.gatewayConfig.create({
-        data: { gatewayName: 'simplify', clientId: '', clientSecret: '', ...body.data },
+        data: { gatewayName: 'simplify', clientId: '', clientSecret: '', ...saveData },
       })
     }
     return reply.send({ success: true })
@@ -938,15 +962,32 @@ export async function adminRoutes(app: FastifyInstance) {
         orderBy: { id: 'desc' },
         select: {
           id: true, nomeCompleto: true, email: true, affiliateCode: true,
-          comissao: true, isInfluencer: true, role: true, managerPool: true,
-          revshareRecurring: true, managerId: true,
+          comissao: true, commissionType: true, isInfluencer: true, role: true,
+          managerPool: true, revshareRecurring: true, managerId: true,
+          saldoRevshare: true,
           manager:   { select: { nomeCompleto: true, email: true } },
           _count:    { select: { referrals: true } },
         },
       }),
       prisma.user.count({ where }),
     ])
-    return reply.send({ success: true, data: affiliates, affiliates, total, pages: Math.ceil(total / limit) })
+
+    const mapped = affiliates.map(a => ({
+      id:                a.id,
+      nomeCompleto:      a.nomeCompleto,
+      email:             a.email,
+      affiliateCode:     a.affiliateCode,
+      comissao:          a.comissao,
+      commissionType:    a.commissionType,
+      isInfluencer:      a.isInfluencer,
+      role:              a.role,
+      saldoRevshare:     a.saldoRevshare,
+      totalConvidados:   a._count.referrals,
+      totalDepositantes: 0,
+      managerId:         a.managerId,
+      manager:           a.manager,
+    }))
+    return reply.send({ success: true, data: mapped, affiliates: mapped, total, pages: Math.ceil(total / limit) })
   })
 
   // ── Detalhes de afiliado (usuários convidados) ────────────────────────────────

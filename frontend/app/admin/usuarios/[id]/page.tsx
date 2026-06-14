@@ -41,17 +41,25 @@ export default function UserDetailPage() {
   async function doPromote() {
     if (!promoteAction) return;
     try {
-      await api.admin.promote({ action: promoteAction, userId: parseInt(id), comissao: parseFloat(promoteComissao) });
+      const uid = parseInt(id);
+      const pct = parseFloat(promoteComissao);
+      let payload: any = { action: promoteAction, userId: uid };
+      if (promoteAction === "promote_to_manager")    payload.managerPool = pct;
+      if (promoteAction === "promote_to_influencer") payload.comissao = pct;
+      if (promoteAction === "toggle_recurring")      payload.recurring = true;
+      await api.admin.promote(payload);
       toast("Ação realizada!", "success");
       load();
     } catch (err: any) { toast(err.message, "error"); }
   }
 
   async function creditDeposit() {
-    const amount = prompt("Valor do crédito manual (R$):");
-    if (!amount) return;
+    const raw = prompt("Valor do crédito manual (R$):");
+    if (!raw) return;
+    const valor = parseFloat(raw);
+    if (isNaN(valor) || valor <= 0) { toast("Valor inválido", "error"); return; }
     try {
-      await api.admin.promote({ action: "credit_deposit", userId: parseInt(id), amount: parseFloat(amount) });
+      await api.admin.promote({ action: "credit_deposit", userId: parseInt(id), valor });
       toast("Crédito adicionado!", "success");
       load();
     } catch (err: any) { toast(err.message, "error"); }

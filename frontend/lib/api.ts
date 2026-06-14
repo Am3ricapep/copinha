@@ -150,10 +150,15 @@ export const api = {
       req<{ success: boolean; data: WebhookLog[] }>("/admin/webhook-logs"),
     reprocessWebhook: (id: number) =>
       req<{ success: boolean }>(`/admin/webhook-logs/${id}/reprocess`, { method: "POST" }),
-    verifyWithdrawToken: (token?: string) =>
+    generateWithdrawToken: () =>
       req<{ success: boolean; token?: string; message?: string }>("/admin/verify-withdraw-token", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ action: "generate" }),
+      }),
+    verifyWithdrawToken: (token: string) =>
+      req<{ success: boolean; valid?: boolean; message?: string }>("/admin/verify-withdraw-token", {
+        method: "POST",
+        body: JSON.stringify({ action: "verify", token }),
       }),
     searchUsers: (q: string) =>
       req<{ success: boolean; data: User[] }>(`/admin/search-users?q=${encodeURIComponent(q)}`),

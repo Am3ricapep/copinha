@@ -31,7 +31,7 @@ export default function GatewayPage() {
   async function generateToken() {
     setGeneratingToken(true);
     try {
-      const res = await api.admin.verifyWithdrawToken(undefined);
+      const res = await api.admin.generateWithdrawToken();
       setNewToken(res.token ?? "");
       toast("Token gerado! Copie antes de sair.", "info");
     } catch (err: any) { toast(err.message, "error"); }
@@ -39,9 +39,11 @@ export default function GatewayPage() {
   }
 
   async function verifyToken() {
+    if (!token) return;
     try {
-      await api.admin.verifyWithdrawToken(token);
-      toast("Token válido ✓", "success");
+      const res = await api.admin.verifyWithdrawToken(token);
+      if (res.valid) toast("Token válido ✓", "success");
+      else toast("Token inválido ✗", "error");
     } catch (err: any) { toast(err.message, "error"); }
   }
 

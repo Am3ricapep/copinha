@@ -33,7 +33,7 @@ export default function GerentesPage() {
   async function promote() {
     if (!selectedUser) return;
     try {
-      await api.admin.promote({ action: "promote_to_manager", userId: selectedUser.id, pool: parseFloat(pool) });
+      await api.admin.promote({ action: "promote_to_manager", userId: selectedUser.id, managerPool: parseFloat(pool) });
       toast(`${selectedUser.nomeCompleto} promovido a gerente!`, "success");
       setPromoteModal(false);
       setSelectedUser(null);
@@ -54,7 +54,8 @@ export default function GerentesPage() {
 
   async function toggleRecurring(id: number) {
     try {
-      await api.admin.promote({ action: "toggle_manager_recurring", userId: id });
+      const m = data.find(x => x.id === id);
+      await api.admin.promote({ action: "toggle_manager_recurring", userId: id, recurring: !(m?.managerRecurring ?? true) });
       toast("Recorrência atualizada!", "success");
       load();
     } catch (err: any) { toast(err.message, "error"); }
