@@ -13,7 +13,13 @@ import { adminRoutes } from './modules/admin/admin.routes'
 import { managerRoutes } from './modules/manager/manager.routes'
 import { publicRoutes } from './modules/public/public.routes'
 
-const app = Fastify({ logger: true })
+const app = Fastify({ logger: true, ajv: { customOptions: { allowUnionTypes: true } } })
+
+// Permite body vazio em requisições com Content-Type: application/json
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  if (!body || (body as string).trim() === '') return done(null, {})
+  try { done(null, JSON.parse(body as string)) } catch (err: any) { done(err) }
+})
 
 // ── Plugins ──────────────────────────────────────────────────────────────────
 app.register(helmet)
