@@ -8,15 +8,19 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
 
   const headers = new Headers();
   req.headers.forEach((v, k) => {
-    if (!["host", "connection"].includes(k)) headers.set(k, v);
+    if (!["host", "connection", "transfer-encoding"].includes(k)) headers.set(k, v);
   });
+
+  let body: BodyInit | undefined = undefined;
+  if (!["GET", "HEAD"].includes(req.method)) {
+    body = await req.arrayBuffer();
+  }
 
   const res = await fetch(url, {
     method: req.method,
     headers,
-    body: ["GET", "HEAD"].includes(req.method) ? undefined : req.body,
-    duplex: "half",
-  } as RequestInit);
+    body: body && (body as ArrayBuffer).byteLength > 0 ? body : undefined,
+  });
 
   const resHeaders = new Headers();
   res.headers.forEach((v, k) => {
