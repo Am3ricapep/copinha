@@ -19,18 +19,75 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // ── Dashboard ─────────────────────────────────────────────────────────────────
   app.get('/dashboard', async (_request, reply) => {
-    const [totalUsers, totalDeposits, totalWithdrawals, totalGames] = await Promise.all([
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const [
+      totalUsers,
+      cadastrosHoje,
+      saldoEmContas,
+      totalDepositsAgg,
+      totalWithdrawalsAgg,
+      ftdHojeQtd,
+      ftdAmountHojeAgg,
+      pixPendentes,
+      pixFalhados,
+      totalTaxPaidAgg,
+      avgWithdrawAgg,
+      avgDepositAgg,
+      recentDeposits,
+      gateway,
+    ] = await Promise.all([
       prisma.user.count({ where: { role: 'user' } }),
+      prisma.user.count({ where: { createdAt: { gte: today } } }),
+      prisma.user.aggregate({ _sum: { saldo: true } }),
       prisma.deposit.aggregate({ where: { status: 'paid' }, _sum: { amount: true } }),
       prisma.withdrawal.aggregate({ where: { status: { in: ['approved', 'paid'] } }, _sum: { amount: true } }),
-      prisma.gameHistory.count(),
+      prisma.deposit.count({ where: { status: 'paid', createdAt: { gte: today } } }),
+      prisma.deposit.aggregate({ where: { status: 'paid', createdAt: { gte: today } }, _sum: { amount: true } }),
+      prisma.deposit.count({ where: { status: 'pending' } }),
+      prisma.deposit.count({ where: { status: 'failed' } }),
+      prisma.withdrawal.aggregate({ where: { status: { in: ['approved', 'paid'] } }, _sum: { amount: true } }),
+      prisma.withdrawal.aggregate({ where: { status: { in: ['approved', 'paid'] } }, _avg: { amount: true } }),
+      prisma.deposit.aggregate({ where: { status: 'paid' }, _avg: { amount: true } }),
+      prisma.deposit.findMany({
+        where: { status: 'paid' },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: { user: { select: { email: true } } },
+      }),
+      prisma.gatewayConfig.findFirst({ where: { isActive: true } }),
     ])
+
+    const totalDep = Number(totalDepositsAgg._sum.amount ?? 0)
+    const totalWith = Number(totalWithdrawalsAgg._sum.amount ?? 0)
+
     return reply.send({
       success: true,
-      totalUsers,
-      totalDeposits:    totalDeposits._sum.amount    ?? 0,
-      totalWithdrawals: totalWithdrawals._sum.amount ?? 0,
-      totalGames,
+      data: {
+        totalUsers,
+        cadastrosHoje,
+        saldoEmContas:   Number(saldoEmContas._sum.saldo ?? 0),
+        totalDeposits:   totalDep,
+        totalWithdrawals: totalWith,
+        ftdHojeQtd,
+        ftdAmountHoje:   Number(ftdAmountHojeAgg._sum.amount ?? 0),
+        ftdTotal:        await prisma.user.count({ where: { deposits: { some: { status: 'paid' } } } }),
+        pixPendentes,
+        pixFalhados,
+        netRevenue:      totalDep - totalWith,
+        totalTaxPaid:    Number(totalTaxPaidAgg._sum.amount ?? 0),
+        avgWithdrawTax:  Number(avgWithdrawAgg._avg.amount ?? 0),
+        avgDeposit:      Number(avgDepositAgg._avg.amount ?? 0),
+        gatewayAtivo:    gateway?.gatewayName ?? null,
+        recentDeposits:  recentDeposits.map(d => ({
+          id:        d.id,
+          amount:    Number(d.amount),
+          status:    d.status,
+          createdAt: d.createdAt,
+          userEmail: d.user.email,
+        })),
+      },
     })
   })
 
