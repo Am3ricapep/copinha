@@ -62,7 +62,7 @@ export async function managerRoutes(app: FastifyInstance) {
 
     return reply.send({
       success: true,
-      saldo:            manager?.saldo ?? 0,
+      saldo:            Number(manager?.saldo ?? 0),
       managerPool:      manager?.managerPool ?? 0,
       managerRecurring: manager?.managerRecurring ?? true,
       totalInfluencers: influencers.length,
