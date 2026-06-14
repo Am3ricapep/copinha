@@ -1,0 +1,14 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  # O frontend é deployado automaticamente pelo EasyPanel via GitHub
+  # Este job só notifica que o deploy foi acionado
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy acionado
+        run: echo "Push recebido — EasyPanel vai rebuildar automaticamente."
