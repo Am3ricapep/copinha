@@ -13,13 +13,19 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
 
   let body: BodyInit | undefined = undefined;
   if (!["GET", "HEAD"].includes(req.method)) {
-    body = await req.arrayBuffer();
+    const buf = await req.arrayBuffer();
+    if (buf.byteLength > 0) {
+      body = buf;
+    } else {
+      // body vazio — remove Content-Type para o Fastify não rejeitar
+      headers.delete("content-type");
+    }
   }
 
   const res = await fetch(url, {
     method: req.method,
     headers,
-    body: body && (body as ArrayBuffer).byteLength > 0 ? body : undefined,
+    body,
   });
 
   const resHeaders = new Headers();
